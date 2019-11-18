@@ -1,7 +1,7 @@
 newPackage(
 	"SchurComplexes",
     	Version => "1.1", 
-    	Date => "December 3, 2018",
+    	Date => "June 1, 2019",
     	Authors => {
 	    {Name => "Michael K. Brown", 
 		  Email => "mkbrown5@wisc.edu", 
@@ -25,8 +25,7 @@ newPackage(
 		  Email => "jsantos3@nd.edu", 
 		  HomePage => "http://math.nd.edu/people/graduate-students/graduate-directory-with-photos/"} 
 	    },
-    	Headline => "Schur functors of complexes",
-    	DebuggingMode => true
+    	Headline => "Schur functors of complexes"
     	)
 
 export {"straightenTableau", "schurComplex"}
@@ -42,12 +41,12 @@ export {"straightenTableau", "schurComplex"}
 standardZ2Tableaux = method();
 standardZ2Tableaux(Partition, ZZ, ZZ) := (lambda,m,n) ->
 (
-    L := {};
+    L :=new MutableList from {};
     addBox:= method();
     --addBox recursively populates L with all standard Z/2 tableaux.
     addBox(ZZ, ZZ, HashTable) := (x,y,T) ->
     (
-    	if y == #lambda and x == last lambda then L = L | {T}
+    	if y == #lambda and x == last lambda then L#(#L)=T
     	else 
     	(
 	    i := local i;
@@ -145,7 +144,7 @@ tableauxDiff(ZZ, ZZ, List, HashTable) := (m,n,lT,D) -> (
 --Input: 
 --a List Lambda which encodes a partition;
 --
---a bounded complex F of finite rank free modules over some commutative ring.
+--a bounded complex F of finite rank free modules over some commutative ring. 
 --
 --Output: 
 --a ChainComplex, the Schur Complex of F associated to the given partition. When F = 0, the output is a 
@@ -153,8 +152,11 @@ tableauxDiff(ZZ, ZZ, List, HashTable) := (m,n,lT,D) -> (
 schurComplex= (Lambda,F) ->
 (
     lambda:=new Partition from Lambda;
+    Size:=sum Lambda;
+    Min:=min{min(F),0};
+    F=F[2*Min];----moves F into non-negative homological degree
     R := ring(F);
-    l := length(F);
+    l := max(F);
     evengen := flatten for i from 0 to l//2 list (
     d := numgens F_(2*i);
     for j from 1 to d list (2*i,j)
@@ -205,10 +207,16 @@ schurComplex= (Lambda,F) ->
 	--of the Schur complex. 
 	    C:= chainComplex for i from 0 to (#matrixList - 1) list map(componentList_i, componentList_(i + 1), matrixList_i);
 	    C.ring = R;
-	    C[-shift]
+	    C[-shift-2*Min*Size]---moves the Schur complex based on the shift of F at the beginning
 	) 
     else new ChainComplex    
 )
+
+
+
+
+    
+
 
 --Input:
 --a HashTable T encoding a Z/2-graded tableau. We are thinking of T as an element of a Schur complex S_lambda(F)
@@ -439,14 +447,18 @@ doc///
    S=straightenTableau(T,lambda)
   Inputs
    T: HashTable
+     with keys $(i,j)$ representing the box of the Young diagram in column $i$ and row $j$. The values of {\tt T} are the entries of the boxes.
    lambda: List
   Outputs
-   S:HashTable
+   S: HashTable
+     with keys representing standard tableaux and values representing the coefficients.
   Description
    Text
-     This function takes a $\mathbb{Z}/2\mathbb{Z}$-graded Young tableau and expresses it as a linear combination of standard tableau. Positive entries correspond to even elements, and negative entries correspond to odd elements.
+     This function takes a $\mathbb{Z}/2\mathbb{Z}$-graded Young tableau and expresses it as a linear combination of standard tableau. Positive entries in the tableaux correspond to even elements, and negative entries correspond to odd elements.
      
-     The user inputs the Young tableau {\tt T} in the form of a HashTable, and a partition of the same shape as {\tt T}, in the form of a {\tt List}.
+     The user inputs the Young tableau {\tt T} in the form of a hash table, and a partition of the same shape as {\tt T}, in the form of a list. The key $(i,j)$ in the hash table of {\tt T} corresponds to the box of {\tt T} in column $i$ and row $j$. The values are the entries of the boxes of {\tt T}. 
+     
+     The output is a hash table with keys representing standard tableaux and values representing the coefficients in the linear combination.
      
    Example
     T = new HashTable from {(1,1) => -3, (1,2) => -2, (1,3) => -2, (2,1) => 1, (2,2) => 2, (2,3) => 3, (3,1) => -1, (3,2) => -1};
@@ -474,12 +486,16 @@ doc ///
   Usage
    G=schurComplex(lambda,F)
   Inputs
-   F: ChainComplex
    lambda: List
+   F: ChainComplex
   Outputs
    G: ChainComplex
   Description
    Text
+     This function computes the Schur complex associated to a partition $\lambda$ and a bounded complex $F_{\bullet}$ of finitely-generated free modules over a commutative ring.
+   
+     The user inputs the partition $\lambda$ as a list and the chain complex $F_{\bullet}$. 
+   
      In the following example, the complex {\tt F} is the free resolution of the ideal $(x,y,z)\subset \mathbb{Z}[x,y,z]$, and {\tt lambda} is the partition $(1,1)$ in the form of a {\tt List}. In this case, the Schur complex {\tt G} is the second exterior power of {\tt F}.
      
    Example
@@ -530,6 +546,22 @@ TEST ///
     assert (H1 === 0)
 ///
 
+
+TEST ///-------this Schur complex is exact by Proposition 2.4.7(a) Weyman "Cohomology of Vector Bundles and Syzygies"
+    R=ZZ[x,y,z]
+    M=id_(R^3)
+    F= new ChainComplex; F.ring = R; F#-7=target M; F#-6=source M; F.dd#-6=M;
+    lambda={3,1}
+    G=schurComplex(lambda,F)
+    H={}
+    for i from -28 to -24 do H=H|{reduceHilbert hilbertSeries HH_i(G)}
+    H1=unique H
+    H2=lift(numerator(H1_0),ZZ)
+    assert (#H1 === 1 and H2 === 0)
+///
+
+
+
 TEST ///
     R=ZZ[x,y]
     F=res ideal (x,y)
@@ -563,6 +595,6 @@ TEST ///
 
 
 
-end--
 
+end
 
